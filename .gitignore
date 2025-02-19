@@ -1,0 +1,7 @@
+/backend/venv
+/backend/.idea
+.idea
+
+.history/
+.vscode/
+web/package-lock.json
