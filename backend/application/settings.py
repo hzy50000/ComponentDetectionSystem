@@ -60,8 +60,8 @@ INSTALLED_APPS = [
     "captcha",
     "channels",
     "dvadmin.system",
+    "unet_service",  # UNet预测服务
 ]
-
 MIDDLEWARE = [
     "dvadmin.utils.middleware.HealthCheckMiddleware",
     "django.middleware.security.SecurityMiddleware",
