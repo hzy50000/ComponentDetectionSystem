@@ -89,6 +89,14 @@ export const staticRoutes: Array<RouteRecordRaw> = [
 		},
 	},
 	{
+		path: '/unet',
+		name: '缺陷检测',
+		component: () => import('/@/views/unet/index.vue'),
+		meta: {
+			title: '缺陷检测',
+		},
+	},
+	{
 		path: '/demo',
 		name: 'demo',
 		component: () => import('/@/views/system/demo/index.vue'),

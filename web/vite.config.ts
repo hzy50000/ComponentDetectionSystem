@@ -34,12 +34,22 @@ const viteConfig = defineConfig((mode: ConfigEnv) => {
 			open: false,
 			hmr: true,
 			proxy: {
-				'/gitee': {
-					target: 'https://gitee.com',
-					ws: true,
-					changeOrigin: true,
-					rewrite: (path) => path.replace(/^\/gitee/, ''),
-				},
+			'/gitee': {
+			target: 'https://gitee.com',
+			ws: true,
+			changeOrigin: true,
+			rewrite: (path) => path.replace(/^\/gitee/, ''),
+			},
+			'/api': {
+			target: env.VITE_API_URL,
+			changeOrigin: true,
+			ws: true,
+			},
+			'/media': {
+			target: env.VITE_API_URL,
+			changeOrigin: true,
+			ws: true,
+			},
 			},
 		},
 		build: {
