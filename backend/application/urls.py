@@ -117,6 +117,7 @@ urlpatterns = (
             path('web/<path:filename>', serve_web_files, name='serve_web_files'),
             # UNet预测服务API
             path('api/unet/', include('unet_service.urls')),
+            path('', include('data_manager.urls'))
         ]
         + static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
         + static(settings.STATIC_URL, document_root=settings.STATIC_URL)

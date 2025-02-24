@@ -61,6 +61,7 @@ INSTALLED_APPS = [
     "channels",
     "dvadmin.system",
     "unet_service",  # UNet预测服务
+    "data_manager", # 数据集管理
 ]
 MIDDLEWARE = [
     "dvadmin.utils.middleware.HealthCheckMiddleware",
