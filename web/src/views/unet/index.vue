@@ -4,7 +4,6 @@
       <h2 class="page-title">车辆零部件缺陷检测系统</h2>
       <div class="header-buttons">
         <el-button type="primary" @click="goToLogin" class="admin-button">后台</el-button>
-<!--        <el-button type="danger" @click="handleLogout" v-if="Session.get('token')">退出登录</el-button>-->
       </div>
     </div>
     
@@ -15,12 +14,15 @@
         action=""
         :auto-upload="false"
         :on-change="handleFileChange"
-        accept="image/*"
+        accept="image/*,.zip"
       >
         <el-icon class="el-icon--upload"><upload-filled /></el-icon>
         <div class="el-upload__text">
-          拖拽图片到此处或 <em>点击上传</em>
+          拖拽图片或ZIP文件到此处或 <em>点击上传</em>
         </div>
+        <template #tip>
+          <div class="el-upload__tip">支持上传单张图片或包含多张图片的ZIP文件</div>
+        </template>
       </el-upload>
 
       <div class="params-section" v-if="selectedFile">
@@ -51,14 +53,23 @@
       </div>
     </el-card>
 
-    <el-card v-if="resultUrl" class="result-card">
+    <el-card v-if="resultUrls.length > 0" class="result-card">
       <template #header>
         <div class="card-header">
           <span>预测结果</span>
+          <div class="result-pagination" v-if="resultUrls.length > 1">
+            <el-pagination
+              v-model:current-page="currentPage"
+              :page-size="1"
+              :total="resultUrls.length"
+              layout="prev, pager, next"
+              @current-change="handlePageChange"
+            />
+          </div>
         </div>
       </template>
       <div class="result-image">
-        <img :src="resultUrl" alt="预测结果" />
+        <img :src="currentResultUrl" alt="预测结果" />
       </div>
     </el-card>
 
@@ -74,7 +85,7 @@
 </template>
 
 <script lang="ts" setup>
-import { ref, reactive, onMounted } from 'vue'
+import { ref, reactive, onMounted, computed } from 'vue'
 import { UploadFilled } from '@element-plus/icons-vue'
 import { predictImage } from '/@/api/unet'
 import { useRouter } from 'vue-router'
@@ -85,9 +96,15 @@ const router = useRouter()
 
 const selectedFile = ref<UploadFile>()
 const loading = ref(false)
-const resultUrl = ref('')
+const resultUrls = ref<string[]>([])
+const currentPage = ref(1)
 const errorVisible = ref(false)
 const errorMessage = ref('')
+
+const currentResultUrl = computed(() => {
+  if (resultUrls.value.length === 0) return ''
+  return resultUrls.value[currentPage.value - 1]
+})
 
 const params = reactive({
   scaleFactor: 1.0,
@@ -95,12 +112,29 @@ const params = reactive({
 })
 
 const handleFileChange = (file: UploadFile) => {
+  // 检查文件类型
+  const isImage = file.raw?.type.startsWith('image/')
+  const isZip = file.raw?.type === 'application/zip' || file.name.endsWith('.zip')
+  
+  if (!isImage && !isZip) {
+    errorMessage.value = '请上传图片文件或ZIP文件'
+    errorVisible.value = true
+    selectedFile.value = undefined
+    return
+  }
+  
   selectedFile.value = file
+  resultUrls.value = [] // 清空之前的结果
+  currentPage.value = 1
+}
+
+const handlePageChange = (page: number) => {
+  currentPage.value = page
 }
 
 const handlePredict = async () => {
   if (!selectedFile.value) {
-    errorMessage.value = '请先选择图片'
+    errorMessage.value = '请先选择文件'
     errorVisible.value = true
     return
   }
@@ -108,12 +142,18 @@ const handlePredict = async () => {
   loading.value = true
   try {
     const formData = new FormData()
-    formData.append('image', selectedFile.value.raw!)
+    formData.append('file', selectedFile.value.raw!)
     formData.append('scale_factor', params.scaleFactor.toString())
     formData.append('threshold', params.threshold.toString())
 
     const response = await predictImage(formData)
-    resultUrl.value = response.result_url
+    
+    if (Array.isArray(response.result_urls)) {
+      resultUrls.value = response.result_urls
+    } else {
+      resultUrls.value = [response.result_url]
+    }
+    currentPage.value = 1
   } catch (error: any) {
     errorMessage.value = error.message || '预测失败'
     errorVisible.value = true
@@ -128,14 +168,14 @@ const goToLogin = () => {
 
 const handleLogout = () => {
   Session.clear()
-  // 直接刷新页面
   window.location.reload()
 }
 
 onMounted(() => {
   // 初始化状态
   selectedFile.value = undefined
-  resultUrl.value = ''
+  resultUrls.value = []
+  currentPage.value = 1
   loading.value = false
   errorVisible.value = false
   errorMessage.value = ''
@@ -238,6 +278,13 @@ onMounted(() => {
   font-weight: 600;
 }
 
+.el-upload__tip {
+  color: #909399;
+  font-size: 14px;
+  margin-top: 12px;
+  text-align: center;
+}
+
 .params-section {
   margin-top: 30px;
   padding: 20px;
@@ -287,6 +334,14 @@ onMounted(() => {
   color: #2c3e50;
   background-color: #f8f9fa;
   border-bottom: 1px solid rgba(0, 0, 0, 0.08);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.result-pagination {
+  display: flex;
+  align-items: center;
 }
 
 .result-image {
