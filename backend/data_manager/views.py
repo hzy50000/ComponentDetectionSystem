@@ -25,6 +25,7 @@ class DatasetModelViewSet(CustomModelViewSet):
     update_serializer_class = DatasetManagerCreateUpdateSerializer
     filter_fields = ['name', 'type']
     search_fields = ['name']
+    http_method_names = ['get', 'post', 'put', 'patch', 'delete']  # 明确指定允许的HTTP方法
 
     @action(detail=False, methods=['post'], permission_classes=[IsAuthenticated])
     def upload_dataset(self, request):
@@ -61,24 +62,108 @@ class DatasetModelViewSet(CustomModelViewSet):
                 "received_files": str(request.FILES)
             }, status=status.HTTP_400_BAD_REQUEST)
 
-        dataset_file = found_file
-        dataset_dir = os.path.join(settings.MEDIA_ROOT, "datasets")
+        # 处理found_file
+        if isinstance(found_file, str):
+            # 如果是字符串路径，尝试多个可能的路径
+            possible_paths = [
+                os.path.join(settings.BASE_DIR, settings.MEDIA_ROOT, found_file),  # 完整路径
+                os.path.join(settings.BASE_DIR, found_file),  # 相对于BASE_DIR的路径
+                found_file,  # 原始路径
+            ]
+            
+            print("尝试查找文件路径...")
+            for try_path in possible_paths:
+                print(f"尝试路径: {try_path}")
+                if os.path.exists(try_path):
+                    print(f"找到文件: {try_path}")
+                    file_path = try_path
+                    break
+            else:
+                return Response({
+                    "error": f"找不到文件: {found_file}",
+                    "tried_paths": possible_paths
+                }, status=status.HTTP_404_NOT_FOUND)
+            
+            # 获取文件名
+            file_name = os.path.basename(found_file)
+            dataset_file = found_file
+        else:
+            if not hasattr(found_file, 'name'):
+                return Response({
+                    "error": "文件对象缺少name属性",
+                    "received_type": str(type(found_file))
+                }, status=status.HTTP_400_BAD_REQUEST)
+            dataset_file = found_file
+            file_name = dataset_file.name
+
+        # 创建目标目录
+        dataset_dir = os.path.join(settings.BASE_DIR, settings.MEDIA_ROOT, "datasets")
         
         # 确保目录存在
         if not os.path.exists(dataset_dir):
             os.makedirs(dataset_dir)
             
-        file_path = os.path.join(dataset_dir, dataset_file.name)
+        target_path = os.path.join(dataset_dir, file_name)
+        print("目标目录:", dataset_dir)  # 调试日志
         
         try:
-            with open(file_path, 'wb+') as dest:
-                for chunk in dataset_file.chunks():
-                    dest.write(chunk)
+            if isinstance(dataset_file, str):
+                # 如果是字符串路径，直接复制文件
+                import shutil
+                source_path = file_path  # 使用之前找到的有效文件路径
+                print("复制文件 - 源路径:", source_path)  # 调试日志
+                print("复制文件 - 目标路径:", target_path)  # 调试日志
+                shutil.copy2(source_path, target_path)
+            else:
+                # 如果是文件对象，按块写入
+                with open(target_path, 'wb+') as dest:
+                    for chunk in dataset_file.chunks():
+                        dest.write(chunk)
             
-            return Response({
-                "message": "数据集上传成功",
-                "filename": dataset_file.name
-            }, status=status.HTTP_200_OK)
+            # 创建数据集记录
+            relative_path = os.path.join('datasets', file_name)  # 存储相对路径
+            
+            # 从请求中获取数据集信息
+            dataset_data = {
+                'name': request.data.get('name', ''),  # 必须提供名称
+                'description': request.data.get('description', ''),
+                'type': request.data.get('type', ''),
+                'data': relative_path,  # 存储相对路径
+                'owner_id': request.user.id if request.user.is_authenticated else None
+            }
+
+            # 如果没有提供名称，则使用文件名（不包含扩展名）
+            if not dataset_data['name']:
+                dataset_data['name'] = os.path.splitext(file_name)[0]
+
+            print("要创建的数据集记录:", dataset_data)  # 调试日志
+
+            # 使用序列化器创建数据集记录
+            serializer = DatasetManagerCreateUpdateSerializer(data=dataset_data)
+            if serializer.is_valid():
+                try:
+                    dataset = serializer.save()
+                    return Response({
+                        "message": "数据集上传成功",
+                        "id": dataset.id,
+                        "name": dataset.name,
+                        "data": serializer.data
+                    }, status=status.HTTP_200_OK)
+                except Exception as e:
+                    # 如果保存失败，删除已上传的文件
+                    if os.path.exists(target_path):
+                        os.remove(target_path)
+                    return Response({
+                        "error": f"创建数据集记录失败: {str(e)}"
+                    }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+            else:
+                # 如果验证失败，删除已上传的文件
+                if os.path.exists(target_path):
+                    os.remove(target_path)
+                return Response({
+                    "error": "数据集信息验证失败",
+                    "details": serializer.errors
+                }, status=status.HTTP_400_BAD_REQUEST)
             
         except Exception as e:
             return Response({

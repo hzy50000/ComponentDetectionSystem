@@ -36,7 +36,7 @@ export function AddObj(obj: AddReq) {
 
 export function UpdateObj(obj: EditReq) {
     return request({
-        url: urlPrefix,
+        url: `${urlPrefix}${obj.id}/`,
         method: 'put',
         data: obj
     });

@@ -30,51 +30,73 @@ export const createCrudOptions = function ({
                 throw new Error('请选择要上传的文件');
             }
 
-            // 修改文件对象获取逻辑
-            let fileToUpload;
-            if (Array.isArray(form.data)) {
-                fileToUpload = form.data[0]?.response || form.data[0]?.raw || form.data[0];
-            } else {
-                fileToUpload = form.data.response || form.data.raw || form.data;
-            }
-
-            console.log('文件对象:', fileToUpload);  // 调试日志
-
-            // 构建FormData
+            console.log('开始处理文件上传，form.data:', form.data);
+            const fileData = form.data;
             const formData = new FormData();
-            formData.append('data', fileToUpload);
 
-            // 上传文件
-            const uploadRes = await api.UploadDataset(formData);
+            // 添加基本字段到formData
+            formData.append('name', form.name || '');
+            formData.append('description', form.description || '');
+            formData.append('type', form.type || '');
 
-            if (uploadRes.data && uploadRes.data.filename) {
-                form.file_name = uploadRes.data.filename;
+
+            if (typeof fileData === 'string') {
+                // 如果是字符串路径，需要去除可能的前导斜杠
+                const cleanPath = fileData.replace(/^\/+/, '');
+                console.log('使用文件路径上传:', cleanPath);
+                formData.append('data', cleanPath);
             } else {
-                throw new Error('文件上传失败: 未收到文件名');
+                // 如果是文件对象，尝试获取File对象
+                const getValue = (obj: any): File | null => {
+                    if (obj instanceof File) return obj;
+                    if (obj?.raw instanceof File) return obj.raw;
+                    if (obj?.originFileObj instanceof File) return obj.originFileObj;
+                    if (Array.isArray(obj) && obj.length > 0) return getValue(obj[0]);
+                    return null;
+                };
+
+                const file = getValue(fileData);
+                if (!file) {
+                    throw new Error('无法获取有效的文件对象');
+                }
+                console.log('使用File对象上传:', file.name);
+                formData.append('data', file);
             }
 
-            // 创建数据集记录
-            return await api.AddObj({
-                name: form.name,
-                description: form.description,
-                type: form.type,
-                file_name: form.file_name
-            });
+            // 显示formData内容用于调试
+            console.log('FormData内容:');
+            for (const pair of formData.entries()) {
+                console.log(pair[0] + ': ' + pair[1]);
+            }
+
+            // 上传文件和其他字段
+            console.log('开始上传数据...');
+            const uploadRes = await api.UploadDataset(formData);
+            console.log('上传响应:', uploadRes);
+
+            if (!uploadRes.data) {
+                throw new Error('上传失败: 未收到响应数据');
+            }
+
+            // 数据集记录应该已经在后端创建，这里直接返回响应
+            return uploadRes;
         } catch (error: any) {
             console.error('处理错误:', error);
             throw new Error(error.message || '添加数据集失败');
         }
     };
-    
-    // 获取公共配置
-    const commonConfig = commonCrudConfig({
-        create_datetime: { form: true, table: true, search: true },
-        update_datetime: { form: true, table: true, search: true },
-        creator_name: { form: true, table: true, search: true },
-        modifier_name: { form: true, table: true, search: true },
-        dept_belong_id: { form: true, table: true, search: true },
-        description: { form: false, table: false, search: false } // 不使用公共的description配置
-    });
+    // 定义字段配置
+    const baseConfig = {
+        create_datetime: { form: false, table: false, search: false },
+        update_datetime: { form: false, table: false, search: false },
+        creator_name: { form: false, table: false, search: false },
+        modifier_name: { form: false, table: false, search: false },
+        dept_belong_id: { form: false, table: false, search: false },
+        description: { form: true, table: true, search: false }
+    };
+
+    // 应用通用配置
+    const commonConfig = commonCrudConfig(baseConfig);
     
     return {
         crudOptions: {
@@ -106,46 +128,24 @@ export const createCrudOptions = function ({
                 width: 140,
                 buttons: {
                     view: {
-                        type: 'text',
-                        thin: true,
+                        iconRight: 'View',
                         show: true, // 显示查看按钮
                         text: "查看"
                     },
                     edit: {
-                        type: 'text',
-                        thin: true,
+                        iconRight: 'Edit',
                         show: true, // 显示编辑按钮
                         text: "编辑"
                     },
                     remove: {
-                        type: 'text',
-                        thin: true,
+                        iconRight: 'Delete',
                         show: true, // 显示删除按钮
                         text: "删除"
                     }
                 }
             },
             columns: {
-                _index: {
-                    title: "序号",
-                    type: "index",
-                    form: {show: false},
-                    column: {
-                        align: "center",
-                        width: "70px",
-                        columnSetDisabled: true, //禁止在列设置中选择
-                    }
-                },
-                id: {
-                    title: "ID",
-                    key: "id",
-                    show: false,
-                    disabled: true,
-                    width: 90,
-                    form: {
-                        disabled: true
-                    }
-                },
+                ...commonConfig,
                 name: {
                     title: "数据集名称",
                     key: "name",
@@ -164,19 +164,6 @@ export const createCrudOptions = function ({
                         }
                     }
                 },
-                dataset_description: {
-                    title: "数据集描述",
-                    key: "description", 
-                    type: "textarea",
-                    form: {
-                        component: {
-                            props: {
-                                clearable: true
-                            },
-                            placeholder: "请输入数据集描述"
-                        }
-                    }
-                },
                 type: {
                     title: "数据集类型",
                     key: "type",
@@ -189,31 +176,6 @@ export const createCrudOptions = function ({
                             },
                             placeholder: "请输入数据集类型"
                         }
-                    },
-                    search: {
-                        component: {
-                            props: {
-                                clearable: true
-                            }
-                        }
-                    }
-                },
-                create_time: {
-                    title: "创建时间",
-                    key: "create_time",
-                    type: "datetime",
-                    sortable: true,
-                    form: {
-                        disabled: true
-                    }
-                },
-                update_time: {
-                    title: "更新时间",
-                    key: "update_time",
-                    type: "datetime",
-                    sortable: true,
-                    form: {
-                        disabled: true
                     }
                 },
                 data: {
@@ -229,17 +191,36 @@ export const createCrudOptions = function ({
                                 limit: 1,
                                 accept: ".png,.jpg,.jpeg,.bmp,.zip",
                                 drag: true,
-                                onSuccess: (res: any) => {
-                                    console.log('上传成功:', res);
-                                    // 直接返回文件对象
-                                    return res.data || res;
+                                immediate: false, // 禁止自动上传
+                                onSuccess: (res: any, file: any) => {
+                                    console.log('上传成功，响应:', res);
+                                    console.log('上传成功，文件对象:', file);
+                                    return file;
+                                },
+                                onChange: (file: any) => {
+                                    console.log('文件改变，原始文件对象:', file);
+                                    if (file instanceof File) {
+                                        return file;
+                                    } else if (file?.raw instanceof File) {
+                                        return file.raw;
+                                    }
+                                    return null;
                                 }
                             }
                         },
                         helper: "支持图片格式(png/jpg/jpeg/bmp)及zip压缩包",
                         on: {
                             change: (ctx: any) => {
-                                console.log('文件变化:', ctx);
+                                console.log('文件变化事件:', ctx);
+                                console.log('当前文件值:', ctx.value);
+                                if (ctx.value) {
+                                    // 检查文件对象结构
+                                    console.log('文件对象结构:', {
+                                        isArray: Array.isArray(ctx.value),
+                                        hasRaw: ctx.value.raw || (Array.isArray(ctx.value) && ctx.value[0]?.raw),
+                                        type: typeof ctx.value
+                                    });
+                                }
                             }
                         }
                     }

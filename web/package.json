@@ -24,6 +24,7 @@
 		"axios": "^1.7.4",
 		"countup.js": "^2.8.0",
 		"cropperjs": "^1.6.2",
+		"d2-crud-plus": "^2.17.9",
 		"e-icon-picker": "2.1.1",
 		"echarts": "^5.5.1",
 		"echarts-gl": "^2.0.9",
