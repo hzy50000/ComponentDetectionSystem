@@ -12,6 +12,7 @@
         <div class="input-section">
           <el-radio-group v-model="inputMethod" class="input-method-group">
             <el-radio label="upload">上传新文件</el-radio>
+            <el-radio label="camera">拍摄照片</el-radio>
             <el-radio label="select">选择已有数据集</el-radio>
           </el-radio-group>
 
@@ -34,8 +35,45 @@
             </template>
           </el-upload>
 
+          <!-- 摄像头拍照部分 -->
+          <div v-if="inputMethod === 'camera'" class="camera-section">
+            <div class="camera-container">
+              <video 
+                ref="videoElement" 
+                class="camera-preview"
+                :class="{ 'hidden': hasPhoto }"
+                autoplay 
+                playsinline
+              ></video>
+              <canvas 
+                ref="photoCanvas" 
+                class="photo-canvas"
+                :class="{ 'visible': hasPhoto }"
+              ></canvas>
+            </div>
+            <div class="camera-controls">
+              <el-button 
+                v-if="!hasPhoto"
+                type="primary" 
+                @click="takePhoto"
+                :disabled="!isCameraReady"
+                class="camera-button"
+              >
+                拍照
+              </el-button>
+              <template v-else>
+                <el-button type="primary" @click="retakePhoto" class="camera-button">
+                  重新拍摄
+                </el-button>
+                <el-button type="success" @click="usePhoto" class="camera-button">
+                  使用照片
+                </el-button>
+              </template>
+            </div>
+          </div>
+
           <!-- 选择已有数据集部分 -->
-          <div v-else class="dataset-select">
+          <div v-if="inputMethod === 'select'" class="dataset-select">
             <el-select
               v-model="selectedDataset"
               placeholder="请选择数据集"
@@ -113,7 +151,7 @@
 </template>
 
 <script lang="ts" setup>
-import { ref, reactive, onMounted, computed, watch } from 'vue'
+import { ref, reactive, onMounted, computed, watch, onUnmounted } from 'vue'
 import { UploadFilled } from '@element-plus/icons-vue'
 import { predictImage, getDatasetList } from '/@/api/unet'
 import { useRouter } from 'vue-router'
@@ -122,8 +160,8 @@ import { Session } from '/@/utils/storage'
 
 const router = useRouter()
 
-// 输入方式：上传新文件或选择已有数据集
-const inputMethod = ref<'upload' | 'select'>('upload')
+// 输入方式：上传新文件、拍摄照片或选择已有数据集
+const inputMethod = ref<'upload' | 'camera' | 'select'>('upload')
 const selectedFile = ref<UploadFile>()
 const selectedDataset = ref<number>()
 const datasetList = ref<Array<{id: number, name: string, data: string}>>([])
@@ -133,16 +171,30 @@ const currentPage = ref(1)
 const errorVisible = ref(false)
 const errorMessage = ref('')
 
+// 摄像头相关
+const videoElement = ref<HTMLVideoElement | null>(null)
+const photoCanvas = ref<HTMLCanvasElement | null>(null)
+const stream = ref<MediaStream | null>(null)
+const hasPhoto = ref(false)
+const isCameraReady = ref(false)
+
 // 监听输入方式的变化
-watch(inputMethod, async (newValue) => {
+watch(inputMethod, async (newValue, oldValue) => {
   if (newValue === 'select') {
     // 切换到数据集选择模式时，重新加载数据集列表
     await loadDatasetList()
+  } else if (newValue === 'camera') {
+    // 切换到摄像头模式时，初始化摄像头
+    await initCamera()
+  } else if (oldValue === 'camera') {
+    // 从摄像头模式切换出去时，关闭摄像头
+    closeCamera()
   }
   // 清除之前的选择
   selectedFile.value = undefined
   selectedDataset.value = undefined
   resultUrls.value = []
+  hasPhoto.value = false
 })
 
 const currentResultUrl = computed(() => {
@@ -154,6 +206,73 @@ const params = reactive({
   scaleFactor: 1.0,
   threshold: 0.5
 })
+
+// 初始化摄像头
+const initCamera = async () => {
+  try {
+    stream.value = await navigator.mediaDevices.getUserMedia({
+      video: {
+        width: { ideal: 1280 },
+        height: { ideal: 720 },
+        facingMode: 'environment' // 优先使用后置摄像头
+      }
+    })
+    
+    if (videoElement.value) {
+      videoElement.value.srcObject = stream.value
+      isCameraReady.value = true
+    }
+  } catch (err: any) {
+    errorMessage.value = '无法访问摄像头：' + (err.message || '未知错误')
+    errorVisible.value = true
+    inputMethod.value = 'upload'
+  }
+}
+
+// 关闭摄像头
+const closeCamera = () => {
+  if (stream.value) {
+    stream.value.getTracks().forEach(track => track.stop())
+    stream.value = null
+  }
+  isCameraReady.value = false
+}
+
+// 拍照
+const takePhoto = () => {
+  if (videoElement.value && photoCanvas.value) {
+    const context = photoCanvas.value.getContext('2d')
+    if (context) {
+      photoCanvas.value.width = videoElement.value.videoWidth
+      photoCanvas.value.height = videoElement.value.videoHeight
+      context.drawImage(videoElement.value, 0, 0)
+      hasPhoto.value = true
+    }
+  }
+}
+
+// 重新拍照
+const retakePhoto = () => {
+  hasPhoto.value = false
+}
+
+// 使用拍摄的照片
+const usePhoto = () => {
+  if (photoCanvas.value) {
+    photoCanvas.value.toBlob((blob) => {
+      if (blob) {
+        const file = new File([blob], 'camera-photo.jpg', { type: 'image/jpeg' })
+        const uploadFile: UploadFile = {
+          name: file.name,
+          raw: file,
+          uid: Date.now().toString(),
+          status: 'ready'
+        }
+        selectedFile.value = uploadFile
+      }
+    }, 'image/jpeg', 0.95)
+  }
+}
 
 const handleFileChange = (file: UploadFile) => {
   // 检查文件类型
@@ -251,6 +370,11 @@ onMounted(async () => {
   // 加载数据集列表
   await loadDatasetList()
 })
+
+onUnmounted(() => {
+  // 组件卸载时关闭摄像头
+  closeCamera()
+})
 </script>
 
 <style>
@@ -333,6 +457,58 @@ onMounted(async () => {
 
 .input-method-group {
   margin-bottom: 20px;
+}
+
+.camera-section {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 20px;
+  padding: 20px;
+}
+
+.camera-container {
+  width: 100%;
+  max-width: 800px;
+  position: relative;
+  aspect-ratio: 16/9;
+  background-color: #000;
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.camera-preview, .photo-canvas {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  position: absolute;
+  top: 0;
+  left: 0;
+}
+
+.camera-preview.hidden {
+  display: none;
+}
+
+.photo-canvas {
+  display: none;
+}
+
+.photo-canvas.visible {
+  display: block;
+}
+
+.camera-controls {
+  display: flex;
+  gap: 16px;
+  justify-content: center;
+  margin-top: 20px;
+}
+
+.camera-button {
+  min-width: 120px;
+  height: 40px;
 }
 
 .dataset-select {
