@@ -2,6 +2,13 @@ import { request } from "/@/utils/service";
 import { UserPageQuery, AddReq, EditReq } from '@fast-crud/fast-crud';
 import { Session } from '/@/utils/storage';
 
+export function GetUserInfo() {
+    return request({
+        url: '/api/system/user/user_info/',
+        method: 'get'
+    });
+}
+
 export const urlPrefix = '/api/datasetManager/';
 
 export function UploadDataset(data: FormData) {
@@ -19,10 +26,14 @@ export function UploadDataset(data: FormData) {
 }
 
 export function GetList(query: UserPageQuery) {
+    const token = Session.get('token');
     return request({
         url: urlPrefix,
         method: 'get',
-        params: query
+        params: query,
+        headers: {
+            'Authorization': `JWT ${token}`
+        }
     });
 }
 

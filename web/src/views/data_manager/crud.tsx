@@ -34,10 +34,15 @@ export const createCrudOptions = function ({
             const fileData = form.data;
             const formData = new FormData();
 
+            // 获取用户信息
+            const userInfoRes = await api.GetUserInfo();
+            const username = userInfoRes.data.username;
+
             // 添加基本字段到formData
             formData.append('name', form.name || '');
             formData.append('description', form.description || '');
             formData.append('type', form.type || '');
+            formData.append('creator_name', username);
 
 
             if (typeof fileData === 'string') {

@@ -1,105 +1,149 @@
 <template>
-  <div class="unet-container">
-    <div class="header">
-      <h2 class="page-title">车辆零部件缺陷检测系统</h2>
-      <div class="header-buttons">
-        <el-button type="primary" @click="goToLogin" class="admin-button">后台</el-button>
-      </div>
-    </div>
-    
-    <el-card class="upload-card">
-      <el-upload
-        class="upload-demo"
-        drag
-        action=""
-        :auto-upload="false"
-        :on-change="handleFileChange"
-        accept="image/*,.zip"
-      >
-        <el-icon class="el-icon--upload"><upload-filled /></el-icon>
-        <div class="el-upload__text">
-          拖拽图片或ZIP文件到此处或 <em>点击上传</em>
+  <div class="page-wrapper">
+    <div class="unet-container">
+      <div class="header">
+        <h2 class="page-title">车辆零部件缺陷检测系统</h2>
+        <div class="header-buttons">
+          <el-button type="primary" @click="goToLogin" class="admin-button">后台</el-button>
         </div>
-        <template #tip>
-          <div class="el-upload__tip">支持上传单张图片或包含多张图片的ZIP文件</div>
-        </template>
-      </el-upload>
-
-      <div class="params-section" v-if="selectedFile">
-        <el-form :model="params" label-width="100px">
-          <el-form-item label="缩放因子">
-            <el-input-number
-              v-model="params.scaleFactor"
-              :min="0.1"
-              :max="2"
-              :step="0.1"
-              class="custom-input-number"
-            />
-          </el-form-item>
-          <el-form-item label="预测阈值">
-            <el-input-number
-              v-model="params.threshold"
-              :min="0"
-              :max="1"
-              :step="0.1"
-              class="custom-input-number"
-            />
-          </el-form-item>
-        </el-form>
-
-        <el-button type="primary" @click="handlePredict" :loading="loading" class="predict-button">
-          开始预测
-        </el-button>
       </div>
-    </el-card>
+      
+      <el-card class="upload-card">
+        <div class="input-section">
+          <el-radio-group v-model="inputMethod" class="input-method-group">
+            <el-radio label="upload">上传新文件</el-radio>
+            <el-radio label="select">选择已有数据集</el-radio>
+          </el-radio-group>
 
-    <el-card v-if="resultUrls.length > 0" class="result-card">
-      <template #header>
-        <div class="card-header">
-          <span>预测结果</span>
-          <div class="result-pagination" v-if="resultUrls.length > 1">
-            <el-pagination
-              v-model:current-page="currentPage"
-              :page-size="1"
-              :total="resultUrls.length"
-              layout="prev, pager, next"
-              @current-change="handlePageChange"
-            />
+          <!-- 上传新文件部分 -->
+          <el-upload
+            v-if="inputMethod === 'upload'"
+            class="upload-demo"
+            drag
+            action=""
+            :auto-upload="false"
+            :on-change="handleFileChange"
+            accept="image/*,.zip"
+          >
+            <el-icon class="el-icon--upload"><upload-filled /></el-icon>
+            <div class="el-upload__text">
+              拖拽图片或ZIP文件到此处或 <em>点击上传</em>
+            </div>
+            <template #tip>
+              <div class="el-upload__tip">支持上传单张图片或包含多张图片的ZIP文件</div>
+            </template>
+          </el-upload>
+
+          <!-- 选择已有数据集部分 -->
+          <div v-else class="dataset-select">
+            <el-select
+              v-model="selectedDataset"
+              placeholder="请选择数据集"
+              class="dataset-selector"
+              filterable
+            >
+              <el-option
+                v-for="dataset in datasetList"
+                :key="dataset.id"
+                :label="dataset.name"
+                :value="dataset.id"
+              />
+            </el-select>
           </div>
         </div>
-      </template>
-      <div class="result-image">
-        <img :src="currentResultUrl" alt="预测结果" />
-      </div>
-    </el-card>
 
-    <el-dialog v-model="errorVisible" title="错误" width="30%">
-      <span>{{ errorMessage }}</span>
-      <template #footer>
-        <span class="dialog-footer">
-          <el-button @click="errorVisible = false">确定</el-button>
-        </span>
-      </template>
-    </el-dialog>
+        <div class="params-section" v-if="selectedFile || selectedDataset">
+          <el-form :model="params" label-width="100px">
+            <el-form-item label="缩放因子">
+              <el-input-number
+                v-model="params.scaleFactor"
+                :min="0.1"
+                :max="2"
+                :step="0.1"
+                class="custom-input-number"
+              />
+            </el-form-item>
+            <el-form-item label="预测阈值">
+              <el-input-number
+                v-model="params.threshold"
+                :min="0"
+                :max="1"
+                :step="0.1"
+                class="custom-input-number"
+              />
+            </el-form-item>
+          </el-form>
+
+          <el-button type="primary" @click="handlePredict" :loading="loading" class="predict-button">
+            开始预测
+          </el-button>
+        </div>
+      </el-card>
+
+      <el-card v-if="resultUrls.length > 0" class="result-card">
+        <template #header>
+          <div class="card-header">
+            <span>预测结果</span>
+            <div class="result-pagination" v-if="resultUrls.length > 1">
+              <el-pagination
+                v-model:current-page="currentPage"
+                :page-size="1"
+                :total="resultUrls.length"
+                layout="prev, pager, next"
+                @current-change="handlePageChange"
+              />
+            </div>
+          </div>
+        </template>
+        <div class="result-image">
+          <img :src="currentResultUrl" alt="预测结果" />
+        </div>
+      </el-card>
+
+      <el-dialog v-model="errorVisible" title="错误" width="30%">
+        <span>{{ errorMessage }}</span>
+        <template #footer>
+          <span class="dialog-footer">
+            <el-button @click="errorVisible = false">确定</el-button>
+          </span>
+        </template>
+      </el-dialog>
+    </div>
   </div>
 </template>
 
 <script lang="ts" setup>
-import { ref, reactive, onMounted, computed } from 'vue'
+import { ref, reactive, onMounted, computed, watch } from 'vue'
 import { UploadFilled } from '@element-plus/icons-vue'
-import { predictImage } from '/@/api/unet'
+import { predictImage, getDatasetList } from '/@/api/unet'
 import { useRouter } from 'vue-router'
 import type { UploadFile } from 'element-plus'
 import { Session } from '/@/utils/storage'
 
 const router = useRouter()
 
+// 输入方式：上传新文件或选择已有数据集
+const inputMethod = ref<'upload' | 'select'>('upload')
 const selectedFile = ref<UploadFile>()
+const selectedDataset = ref<number>()
+const datasetList = ref<Array<{id: number, name: string, data: string}>>([])
 const loading = ref(false)
 const resultUrls = ref<string[]>([])
 const currentPage = ref(1)
 const errorVisible = ref(false)
 const errorMessage = ref('')
+
+// 监听输入方式的变化
+watch(inputMethod, async (newValue) => {
+  if (newValue === 'select') {
+    // 切换到数据集选择模式时，重新加载数据集列表
+    await loadDatasetList()
+  }
+  // 清除之前的选择
+  selectedFile.value = undefined
+  selectedDataset.value = undefined
+  resultUrls.value = []
+})
 
 const currentResultUrl = computed(() => {
   if (resultUrls.value.length === 0) return ''
@@ -124,6 +168,7 @@ const handleFileChange = (file: UploadFile) => {
   }
   
   selectedFile.value = file
+  selectedDataset.value = undefined
   resultUrls.value = [] // 清空之前的结果
   currentPage.value = 1
 }
@@ -133,8 +178,8 @@ const handlePageChange = (page: number) => {
 }
 
 const handlePredict = async () => {
-  if (!selectedFile.value) {
-    errorMessage.value = '请先选择文件'
+  if (!selectedFile.value && !selectedDataset.value) {
+    errorMessage.value = '请选择文件或数据集'
     errorVisible.value = true
     return
   }
@@ -142,9 +187,17 @@ const handlePredict = async () => {
   loading.value = true
   try {
     const formData = new FormData()
-    formData.append('file', selectedFile.value.raw!)
     formData.append('scale_factor', params.scaleFactor.toString())
     formData.append('threshold', params.threshold.toString())
+
+    if (selectedFile.value) {
+      formData.append('file', selectedFile.value.raw!)
+    } else if (selectedDataset.value) {
+      const dataset = datasetList.value.find(d => d.id === selectedDataset.value)
+      if (dataset) {
+        formData.append('data', dataset.data)
+      }
+    }
 
     const response = await predictImage(formData)
     
@@ -166,14 +219,27 @@ const goToLogin = () => {
   router.push('/home')
 }
 
-const handleLogout = () => {
-  Session.clear()
-  window.location.reload()
+const loadDatasetList = async () => {
+  try {
+    const response = await getDatasetList()
+    if (response.data) {
+      datasetList.value = response.data.results || response.data
+    }
+  } catch (error: any) {
+    console.error('加载数据集列表失败:', error)
+    errorMessage.value = '加载数据集列表失败：' + (error.response?.data?.msg || error.message)
+    errorVisible.value = true
+    // 如果是认证错误，切换回上传模式
+    if (error.response?.data?.code === 4000) {
+      inputMethod.value = 'upload'
+    }
+  }
 }
 
-onMounted(() => {
+onMounted(async () => {
   // 初始化状态
   selectedFile.value = undefined
+  selectedDataset.value = undefined
   resultUrls.value = []
   currentPage.value = 1
   loading.value = false
@@ -181,16 +247,46 @@ onMounted(() => {
   errorMessage.value = ''
   params.scaleFactor = 1.0
   params.threshold = 0.5
+  
+  // 加载数据集列表
+  await loadDatasetList()
 })
 </script>
 
+<style>
+:root, body, #app {
+  margin: 0;
+  padding: 0;
+  height: 100%;
+  width: 100%;
+  overflow-y: auto !important;
+}
+
+#app {
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+}
+</style>
+
 <style scoped>
-.unet-container {
-  padding: 30px;
-  max-width: 1200px;
-  margin: 0 auto;
+.page-wrapper {
+  flex: 1;
+  width: 100%;
   min-height: 100vh;
   background: linear-gradient(to bottom, #f8f9fa, #ffffff);
+  overflow-y: auto;
+}
+
+.unet-container {
+  box-sizing: border-box;
+  padding: 30px;
+  max-width: 1200px;
+  width: 100%;
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 30px;
 }
 
 .header {
@@ -233,6 +329,21 @@ onMounted(() => {
   border-radius: 12px;
   box-shadow: 0 4px 20px rgba(0, 0, 0, 0.05);
   transition: all 0.3s ease;
+}
+
+.input-method-group {
+  margin-bottom: 20px;
+}
+
+.dataset-select {
+  width: 100%;
+  text-align: center;
+  padding: 20px;
+}
+
+.dataset-selector {
+  width: 80%;
+  max-width: 400px;
 }
 
 .upload-card:hover {
@@ -357,7 +468,6 @@ onMounted(() => {
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
 }
 
-/* 添加过渡动画 */
 .el-card {
   animation: fadeIn 0.5s ease;
 }

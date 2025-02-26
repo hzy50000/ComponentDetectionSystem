@@ -8,6 +8,7 @@ import imghdr
 
 from django.core.files.base import ContentFile
 from django.core.files.storage import default_storage
+from django.conf import settings
 from rest_framework import viewsets, status
 from rest_framework.decorators import action
 from rest_framework.permissions import AllowAny
@@ -93,14 +94,30 @@ class UNetViewSet(viewsets.ViewSet):
         处理图片预测请求，支持单张图片或ZIP文件
         """
         try:
-            # 检查是否有文件上传
-            if 'file' not in request.FILES:
+            # 检查是否有文件上传或数据集路径
+            uploaded_file = None
+            if 'file' in request.FILES:
+                uploaded_file = request.FILES['file']
+            elif 'data' in request.data:
+                dataset_path = request.data['data']
+                # 确保路径是相对于media目录的
+                full_path = os.path.join(settings.MEDIA_ROOT, dataset_path)
+                if os.path.exists(full_path):
+                    # 创建 File 对象
+                    with open(full_path, 'rb') as f:
+                        content = f.read()
+                        uploaded_file = ContentFile(content, name=os.path.basename(full_path))
+                else:
+                    return Response(
+                        {'error': f'找不到数据集文件: {dataset_path}'},
+                        status=status.HTTP_404_NOT_FOUND
+                    )
+            
+            if not uploaded_file:
                 return Response(
-                    {'error': '没有上传文件'},
+                    {'error': '没有上传文件或提供有效的数据集路径'},
                     status=status.HTTP_400_BAD_REQUEST
                 )
-
-            uploaded_file = request.FILES['file']
             logger.info(f"Received file: {uploaded_file.name}")
             
             # 获取缩放因子和阈值参数（可选）
