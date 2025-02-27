@@ -134,7 +134,7 @@ export const createCrudOptions = function ({
                 buttons: {
                     view: {
                         iconRight: 'View',
-                        show: true, // 显示查看按钮
+                        show: false, // 显示查看按钮
                         text: "查看"
                     },
                     edit: {
