@@ -75,28 +75,28 @@ export const commonCrudConfig = (options = {
                 helper: "默认不填则为当前创建用户的部门ID"
             }
         },
-        description: {
-            title: '备注',
-            search: {
-                show: options.description?.search || false
-            },
-            type: 'textarea',
-            column: {
-                width: 100,
-                show: options.description?.table || false,
-            },
-            form: {
-                show: options.description?.form || false,
-                component: {
-                    placeholder: '请输入内容',
-                    showWordLimit: true,
-                    maxlength: '200',
-                }
-            },
-            viewForm: {
-                show: true
-            }
-        },
+        // description: {
+        //     title: '备注',
+        //     search: {
+        //         show: options.description?.search || false
+        //     },
+        //     type: 'textarea',
+        //     column: {
+        //         width: 100,
+        //         show: options.description?.table || false,
+        //     },
+        //     form: {
+        //         show: options.description?.form || false,
+        //         component: {
+        //             placeholder: '请输入内容',
+        //             showWordLimit: true,
+        //             maxlength: '200',
+        //         }
+        //     },
+        //     viewForm: {
+        //         show: true
+        //     }
+        // },
         modifier_name: {
             title: '修改人',
             search: {

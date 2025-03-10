@@ -1,11 +1,5 @@
 # -*- coding: utf-8 -*-
 
-"""
-@author: 猿小天
-@contact: QQ:1638245306
-@Created on: 2022/1/21 003 0:30
-@Remark: 系统配置
-"""
 import django_filters
 from django.db.models import Q
 from django_filters.rest_framework import BooleanFilter
